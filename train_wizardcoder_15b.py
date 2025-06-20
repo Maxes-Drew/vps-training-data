@@ -49,8 +49,6 @@ def preprocess_data(data):
         instruction = str(example.get('instruction', ''))
         input_text = str(example.get('input', ''))
         output_text = str(example.get('output', ''))
-        
-        # WizardCoder format
         prompt = f"Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{instruction}\n\n### Input:\n{input_text}\n\n### Response:\n{output_text}"
         return {"text": prompt}
     
@@ -78,11 +76,13 @@ class CustomTrainer(Trainer):
 
 # Check model architecture for correct target modules
 def find_target_modules(model):
-    """Find the correct target modules for LoRA"""
+    """Find the correct target modules for LoRA - only Linear layers"""
     target_modules = set()
     for name, module in model.named_modules():
-        if any(key in name for key in ['attn', 'proj', 'linear', 'fc', 'mlp']):
-            target_modules.add(name.split('.')[-1])
+        if isinstance(module, (torch.nn.Linear, torch.nn.Embedding, torch.nn.Conv1d, torch.nn.Conv2d)):
+            module_name = name.split('.')[-1]
+            if any(key in module_name for key in ['c_attn', 'c_proj', 'c_fc']):
+                target_modules.add(module_name)
     return list(target_modules)
 
 # Main training function
@@ -108,13 +108,15 @@ def main():
     
     # Find correct target modules for this model
     actual_target_modules = find_target_modules(model)
-    print(f"🎯 Found target modules: {actual_target_modules}")
+    print(f"🎯 Found valid LoRA target modules: {actual_target_modules}")
     
-    # Use the found modules or fall back to common ones
-    if actual_target_modules:
-        target_modules = actual_target_modules[:4]  # Use top 4 modules
-    else:
-        target_modules = TARGET_MODULES
+    # Use only Linear layer modules that LoRA supports
+    valid_modules = ['c_attn', 'c_proj', 'c_fc']
+    target_modules = [m for m in valid_modules if m in actual_target_modules]
+    
+    if not target_modules:
+        # Fallback to safe defaults
+        target_modules = ['c_attn', 'c_proj']
     
     print(f"🎯 Using target modules: {target_modules}")
 
@@ -136,7 +138,7 @@ def main():
 
     # LoRA configuration for 15B model
     lora_config = LoraConfig(
-        r=16,                    # Higher rank for 15B model
+        r=16,
         lora_alpha=32,
         target_modules=target_modules,
         lora_dropout=0.05,
