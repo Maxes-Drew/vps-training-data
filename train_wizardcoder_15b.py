@@ -11,20 +11,10 @@ from transformers.trainer_utils import get_last_checkpoint
 MODEL_NAME = "WizardLM/WizardCoder-15B-V1.0"
 DATA_DIR = "/workspace/vps-training-data/"
 OUTPUT_DIR = "./wizardcoder_15b_finetuned"
-
-# WizardCoder-15B specific target modules (different from CodeLlama)
-TARGET_MODULES = [
-    "c_attn",      # WizardCoder uses different module names
-    "c_proj", 
-    "c_fc",
-    "c_mlp"
-]
-
-# Adjusted parameters for 15B model
-BATCH_SIZE = 1              # Smaller batch size for 15B model
-GRAD_ACCUM_STEPS = 16       # Higher accumulation for effective batch size
-EPOCHS = 2                  # Fewer epochs for large model
-LEARNING_RATE = 1e-5        # Lower learning rate for stability
+BATCH_SIZE = 1
+GRAD_ACCUM_STEPS = 16
+EPOCHS = 2
+LEARNING_RATE = 1e-5
 MAX_SEQ_LENGTH = 512
 
 # Load and prepare dataset
@@ -49,8 +39,6 @@ def preprocess_data(data):
         instruction = str(example.get('instruction', ''))
         input_text = str(example.get('input', ''))
         output_text = str(example.get('output', ''))
-        
-        # WizardCoder format
         prompt = f"Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{instruction}\n\n### Input:\n{input_text}\n\n### Response:\n{output_text}"
         return {"text": prompt}
     
@@ -74,17 +62,16 @@ class CustomTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         outputs = model(**inputs)
         loss = outputs.loss
+        if loss is None:
+            raise ValueError("Loss is None, check input data and model configuration")
         return (loss, outputs) if return_outputs else loss
 
 # Check model architecture for correct target modules
 def find_target_modules(model):
-    """Find the correct target modules for LoRA - only Linear layers"""
     target_modules = set()
     for name, module in model.named_modules():
-        # Only target Linear, Embedding, and Conv layers (LoRA supported)
-        if isinstance(module, (torch.nn.Linear, torch.nn.Embedding, torch.nn.Conv1d, torch.nn.Conv2d)):
+        if isinstance(module, (torch.nn.Linear, torch.nn.Conv1d, torch.nn.Conv2d)):
             module_name = name.split('.')[-1]
-            # Filter out non-trainable modules
             if any(key in module_name for key in ['c_attn', 'c_proj', 'c_fc']):
                 target_modules.add(module_name)
     return list(target_modules)
@@ -110,18 +97,17 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
+    # Enable gradients for all parameters
+    for param in model.parameters():
+        param.requires_grad_(True)
+    
     # Find correct target modules for this model
+    print("🔍 Finding valid LoRA target modules...")
     actual_target_modules = find_target_modules(model)
     print(f"🎯 Found valid LoRA target modules: {actual_target_modules}")
     
-    # Use only Linear layer modules that LoRA supports
-    valid_modules = ['c_attn', 'c_proj', 'c_fc']
-    target_modules = [m for m in valid_modules if m in actual_target_modules]
-    
-    if not target_modules:
-        # Fallback to safe defaults
-        target_modules = ['c_attn', 'c_proj']
-    
+    # Use valid modules or fallback
+    target_modules = actual_target_modules[:4] if actual_target_modules else ['c_attn', 'c_proj']
     print(f"🎯 Using target modules: {target_modules}")
 
     # Load and preprocess data
@@ -142,12 +128,13 @@ def main():
 
     # LoRA configuration for 15B model
     lora_config = LoraConfig(
-        r=16,                    # Higher rank for 15B model
+        r=16,
         lora_alpha=32,
         target_modules=target_modules,
         lora_dropout=0.05,
         bias="none",
-        task_type="CAUSAL_LM"
+        task_type="CAUSAL_LM",
+        use_rslora=True  # Ensure gradients for LoRA
     )
     
     print("🔧 Applying LoRA...")
@@ -156,24 +143,12 @@ def main():
     # Enable gradient checkpointing for memory efficiency
     model.gradient_checkpointing_enable()
     
-    # Ensure LoRA parameters require gradients
-    for name, param in model.named_parameters():
-        if 'lora_' in name:
-            param.requires_grad = True
-    
-    # Enable training mode
-    model.train()
-    
     print("📊 Model parameters:")
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Trainable parameters: {trainable_params:,}")
     print(f"Total parameters: {total_params:,}")
     print(f"Percentage trainable: {100 * trainable_params / total_params:.2f}%")
-    
-    # Verify gradients are enabled
-    grad_enabled_params = sum(1 for p in model.parameters() if p.requires_grad)
-    print(f"🔥 Parameters with gradients enabled: {grad_enabled_params}")
 
     # Training arguments optimized for 15B model
     training_args = TrainingArguments(
