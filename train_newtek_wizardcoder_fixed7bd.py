@@ -33,22 +33,29 @@ def load_json_files(data_dir):
 
 def preprocess_data(data):
     def format_example(example):
-        return {
-            "text": f"{example.get('instruction', '')}\n{example.get('input', '')}\n{example.get('output', '')}"
-        }
+        # Ensure input and output are strings, handle missing keys
+        instruction = str(example.get('instruction', ''))
+        input_text = str(example.get('input', ''))
+        output_text = str(example.get('output', ''))
+        # Combine into a single prompt with clear separation
+        prompt = f"{instruction}\n{input_text}\n### Response:\n{output_text}"
+        return {"text": prompt}
     
     formatted_data = [format_example(item) for item in data]
     return Dataset.from_list(formatted_data)
 
-# Tokenization
+# Tokenization with labels for causal LM
 def tokenize_function(examples, tokenizer):
-    return tokenizer(
+    tokenized = tokenizer(
         examples["text"],
         truncation=True,
         padding="max_length",
         max_length=MAX_SEQ_LENGTH,
         return_tensors="pt"
     )
+    # Set labels to input_ids for causal language modeling
+    tokenized["labels"] = tokenized["input_ids"].clone()
+    return tokenized
 
 # Main training function
 def main():
