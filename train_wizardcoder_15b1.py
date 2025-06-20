@@ -4,8 +4,9 @@ import json
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
 from datasets import Dataset
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from peft import LoraConfig, get_peft_model
 from transformers.trainer_utils import get_last_checkpoint
+from bitsandbytes import BitsAndBytesConfig
 
 # Configuration for WizardCoder-15B
 MODEL_NAME = "WizardLM/WizardCoder-15B-V1.0"
@@ -16,6 +17,14 @@ GRAD_ACCUM_STEPS = 16
 EPOCHS = 2
 LEARNING_RATE = 1e-5
 MAX_SEQ_LENGTH = 512
+
+# BitsAndBytes configuration for 4-bit quantization
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.float16,
+    bnb_4bit_use_double_quant=True
+)
 
 # Load and prepare dataset
 def load_json_files(data_dir):
@@ -59,7 +68,7 @@ def tokenize_function(examples, tokenizer):
 
 # Custom Trainer to ensure loss computation
 class CustomTrainer(Trainer):
-    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         outputs = model(**inputs)
         loss = outputs.loss
         if loss is None:
@@ -87,8 +96,8 @@ def main():
     print("🔽 Loading WizardCoder-15B model...")
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
+        quantization_config=bnb_config,
         device_map="auto",
-        torch_dtype=torch.float16,
         trust_remote_code=True,
         use_cache=False
     )
@@ -96,9 +105,6 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    
-    # Prepare model for training
-    model = prepare_model_for_kbit_training(model)
     
     # Find correct target modules for this model
     print("🔍 Finding valid LoRA target modules...")
@@ -127,8 +133,8 @@ def main():
 
     # LoRA configuration for 15B model
     lora_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
+        r=8,  # Reduced rank for memory
+        lora_alpha=16,
         target_modules=target_modules,
         lora_dropout=0.05,
         bias="none",
