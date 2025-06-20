@@ -33,11 +33,9 @@ def load_json_files(data_dir):
 
 def preprocess_data(data):
     def format_example(example):
-        # Ensure input and output are strings, handle missing keys
         instruction = str(example.get('instruction', ''))
         input_text = str(example.get('input', ''))
         output_text = str(example.get('output', ''))
-        # Combine into a single prompt with clear separation
         prompt = f"{instruction}\n{input_text}\n### Response:\n{output_text}"
         return {"text": prompt}
     
@@ -53,9 +51,15 @@ def tokenize_function(examples, tokenizer):
         max_length=MAX_SEQ_LENGTH,
         return_tensors="pt"
     )
-    # Set labels to input_ids for causal language modeling
     tokenized["labels"] = tokenized["input_ids"].clone()
     return tokenized
+
+# Custom Trainer to ensure loss computation
+class CustomTrainer(Trainer):
+    def compute_loss(self, model, inputs, return_outputs=False):
+        outputs = model(**inputs)
+        loss = outputs.loss
+        return (loss, outputs) if return_outputs else loss
 
 # Main training function
 def main():
@@ -66,6 +70,8 @@ def main():
         torch_dtype=torch.float16,
         trust_remote_code=True
     )
+    model.gradient_checkpointing_enable()  # Ensure gradients
+    model.config.use_cache = False  # Disable cache for training
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     tokenizer.pad_token = tokenizer.eos_token
 
@@ -110,8 +116,8 @@ def main():
         gradient_checkpointing=True
     )
 
-    # Initialize trainer
-    trainer = Trainer(
+    # Initialize custom trainer
+    trainer = CustomTrainer(
         model=model,
         args=training_args,
         train_dataset=tokenized_dataset,
