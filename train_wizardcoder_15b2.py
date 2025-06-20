@@ -97,6 +97,10 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
+    # Enable gradients for training
+    for param in model.parameters():
+        param.requires_grad_(True)
+    
     # Find correct target modules for this model
     print("🔍 Finding valid LoRA target modules...")
     actual_target_modules = find_target_modules(model)
