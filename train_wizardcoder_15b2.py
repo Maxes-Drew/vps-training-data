@@ -4,8 +4,8 @@ import json
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
 from datasets import Dataset
+from peft import LoraConfig, get_peft_model
 from transformers.trainer_utils import get_last_checkpoint
-from bitsandbytes import BitsAndBytesConfig
 
 # Configuration for WizardCoder-15B
 MODEL_NAME = "WizardLM/WizardCoder-15B-V1.0"
@@ -16,14 +16,6 @@ GRAD_ACCUM_STEPS = 16
 EPOCHS = 2
 LEARNING_RATE = 1e-5
 MAX_SEQ_LENGTH = 512
-
-# BitsAndBytes configuration for 4-bit quantization
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16,
-    bnb_4bit_use_double_quant=True
-)
 
 # Load and prepare dataset
 def load_json_files(data_dir):
@@ -65,6 +57,25 @@ def tokenize_function(examples, tokenizer):
     tokenized["labels"] = tokenized["input_ids"].clone()
     return tokenized
 
+# Custom Trainer to ensure loss computation
+class CustomTrainer(Trainer):
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        outputs = model(**inputs)
+        loss = outputs.loss
+        if loss is None:
+            raise ValueError("Loss is None, check input data and model configuration")
+        return (loss, outputs) if return_outputs else loss
+
+# Check model architecture for correct target modules
+def find_target_modules(model):
+    target_modules = set()
+    for name, module in model.named_modules():
+        if isinstance(module, (torch.nn.Linear, torch.nn.Conv1d, torch.nn.Conv2d)):
+            module_name = name.split('.')[-1]
+            if any(key in module_name for key in ['c_attn', 'c_proj', 'c_fc']):
+                target_modules.add(module_name)
+    return list(target_modules)
+
 # Main training function
 def main():
     print(f"🧙‍♂️ Starting WizardCoder-15B Training...")
@@ -76,8 +87,8 @@ def main():
     print("🔽 Loading WizardCoder-15B model...")
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
-        quantization_config=bnb_config,
         device_map="auto",
+        torch_dtype=torch.float16,
         trust_remote_code=True,
         use_cache=False
     )
@@ -86,10 +97,15 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    # Enable gradients for training
-    for param in model.parameters():
-        param.requires_grad_(True)
+    # Find correct target modules for this model
+    print("🔍 Finding valid LoRA target modules...")
+    actual_target_modules = find_target_modules(model)
+    print(f"🎯 Found valid LoRA target modules: {actual_target_modules}")
     
+    # Use valid modules or fallback
+    target_modules = actual_target_modules[:4] if actual_target_modules else ['c_attn', 'c_proj']
+    print(f"🎯 Using target modules: {target_modules}")
+
     # Load and preprocess data
     print("📂 Loading training data...")
     raw_data = load_json_files(DATA_DIR)
@@ -105,6 +121,35 @@ def main():
         batched=True,
         remove_columns=["text"]
     )
+
+    # LoRA configuration for 15B model
+    lora_config = LoraConfig(
+        r=8,
+        lora_alpha=16,
+        target_modules=target_modules,
+        lora_dropout=0.05,
+        bias="none",
+        task_type="CAUSAL_LM",
+        use_rslora=True
+    )
+    
+    print("🔧 Applying LoRA...")
+    model = get_peft_model(model, lora_config)
+    
+    # Ensure LoRA parameters require gradients
+    for name, param in model.named_parameters():
+        if 'lora' in name:
+            param.requires_grad_(True)
+    
+    # Enable gradient checkpointing for memory efficiency
+    model.gradient_checkpointing_enable()
+    
+    print("📊 Model parameters:")
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Trainable parameters: {trainable_params:,}")
+    print(f"Total parameters: {total_params:,}")
+    print(f"Percentage trainable: {100 * trainable_params / total_params:.2f}%")
 
     # Training arguments optimized for 15B model
     training_args = TrainingArguments(
@@ -129,8 +174,8 @@ def main():
         max_grad_norm=1.0
     )
 
-    # Initialize trainer
-    trainer = Trainer(
+    # Initialize custom trainer
+    trainer = CustomTrainer(
         model=model,
         args=training_args,
         train_dataset=tokenized_dataset,
