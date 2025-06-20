@@ -6,17 +6,26 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingA
 from datasets import Dataset
 from peft import LoraConfig, get_peft_model
 from transformers.trainer_utils import get_last_checkpoint
+from bitsandbytes import BitsAndBytesConfig
 
 # Configuration
 MODEL_NAME = "codellama/CodeLlama-7b-hf"
 DATA_DIR = "/workspace/vps-training-data/"
 OUTPUT_DIR = "./wizardcoder_7b_finetuned"
-TARGET_MODULES = ["qkv_proj", "out_proj", "fc_in", "fc_out"]
-BATCH_SIZE = 4
-GRAD_ACCUM_STEPS = 4
+TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+BATCH_SIZE = 2
+GRAD_ACCUM_STEPS = 8
 EPOCHS = 3
 LEARNING_RATE = 2e-5
 MAX_SEQ_LENGTH = 512
+
+# BitsAndBytes configuration
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.float16,
+    bnb_4bit_use_double_quant=True
+)
 
 # Load and prepare dataset
 def load_json_files(data_dir):
@@ -55,8 +64,8 @@ def main():
     # Load model and tokenizer
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
+        quantization_config=bnb_config,
         device_map="auto",
-        torch_dtype=torch.float16,
         trust_remote_code=True
     )
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
@@ -75,8 +84,8 @@ def main():
 
     # LoRA configuration
     lora_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
+        r=8,
+        lora_alpha=16,
         target_modules=TARGET_MODULES,
         lora_dropout=0.05,
         bias="none",
