@@ -1,0 +1,8 @@
+{
+  "total_examples": 1000,
+  "harvest_time": "2025-06-19T23:11:42.835181",
+  "sites_processed": 2,
+  "file_types": {
+    ".php": 1000
+  }
+}

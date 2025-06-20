@@ -1,0 +1,11 @@
+{
+  "total_examples": 325,
+  "repos_processed": 5,
+  "harvest_time": 9.554896831512451,
+  "file_types": {
+    ".md": 49,
+    ".sol": 217,
+    ".py": 2,
+    ".js": 57
+  }
+}

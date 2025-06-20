@@ -1,0 +1,12 @@
+{
+  "total_examples": 530,
+  "harvest_time": "2025-06-19T23:22:52.701101",
+  "repos_processed": 5,
+  "file_types": {
+    ".sol": 305,
+    ".go": 137,
+    ".js": 53,
+    ".py": 2,
+    ".md": 33
+  }
+}

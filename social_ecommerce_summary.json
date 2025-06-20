@@ -1,0 +1,37 @@
+{
+  "total_examples": 4259,
+  "sngine_examples": 1970,
+  "magento_examples": 2289,
+  "sngine_target": 3000,
+  "magento_target": 3000,
+  "sngine_completion": 65.66666666666666,
+  "magento_completion": 76.3,
+  "harvest_time": "2025-06-19T23:39:31.821229",
+  "platform_domains": {
+    "sngine_social_platform": 1448,
+    "sngine_messaging": 113,
+    "sngine_notifications": 29,
+    "sngine_content_sharing": 18,
+    "sngine_user_management": 78,
+    "sngine_social_network": 25,
+    "sngine_authentication": 259,
+    "magento_ecommerce_platform": 1757,
+    "magento_product_management": 130,
+    "magento_customer_management": 42,
+    "magento_order_fulfillment": 41,
+    "magento_shopping_experience": 176,
+    "magento_payment_processing": 67,
+    "magento_administration": 76
+  },
+  "file_types": {
+    ".js": 733,
+    ".css": 8,
+    ".php": 3379,
+    ".vue": 1,
+    ".twig": 1,
+    ".xml": 84,
+    ".phtml": 2,
+    ".json": 50,
+    ".less": 1
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "total_examples": 10300,
+  "target_examples": 10000,
+  "completion_percentage": 103.0,
+  "harvest_time": 139.2173295021057,
+  "domains": {
+    "ethereum": 2361,
+    "bitcoin": 332,
+    "blockchain": 6054,
+    "wallets": 641,
+    "defi": 268,
+    "polygon": 644
+  },
+  "file_types": {
+    ".md": 2637,
+    ".sol": 2194,
+    ".py": 1173,
+    ".js": 2321,
+    ".go": 1142,
+    ".json": 344,
+    ".yaml": 69,
+    ".rs": 420
+  }
+}
