@@ -6,7 +6,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingA
 from datasets import Dataset
 from peft import LoraConfig, get_peft_model
 from transformers.trainer_utils import get_last_checkpoint
-from bitsandbytes import BitsAndBytesConfig
 
 # Configuration
 MODEL_NAME = "codellama/CodeLlama-7b-hf"
@@ -18,14 +17,6 @@ GRAD_ACCUM_STEPS = 4
 EPOCHS = 3
 LEARNING_RATE = 2e-5
 MAX_SEQ_LENGTH = 512
-
-# BitsAndBytes configuration
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16,
-    bnb_4bit_use_double_quant=True
-)
 
 # Load and prepare dataset
 def load_json_files(data_dir):
@@ -64,8 +55,8 @@ def main():
     # Load model and tokenizer
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
-        quantization_config=bnb_config,
         device_map="auto",
+        torch_dtype=torch.float16,
         trust_remote_code=True
     )
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
