@@ -56,7 +56,7 @@ def tokenize_function(examples, tokenizer):
 
 # Custom Trainer to ensure loss computation
 class CustomTrainer(Trainer):
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         outputs = model(**inputs)
         loss = outputs.loss
         return (loss, outputs) if return_outputs else loss
@@ -70,8 +70,8 @@ def main():
         torch_dtype=torch.float16,
         trust_remote_code=True
     )
-    model.gradient_checkpointing_enable()  # Ensure gradients
-    model.config.use_cache = False  # Disable cache for training
+    model.gradient_checkpointing_enable()
+    model.config.use_cache = False
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     tokenizer.pad_token = tokenizer.eos_token
 
