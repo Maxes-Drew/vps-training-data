@@ -8,7 +8,7 @@ from peft import LoraConfig, get_peft_model
 from transformers.trainer_utils import get_last_checkpoint
 
 # Configuration for WizardCoder-15B
-MODEL_NAME = "WizardLM/WizardCoder-15B-V1.0"
+MODEL_PATH = "/workspace/wizardcoder_15b"
 DATA_DIR = "/workspace/vps-training-data/"
 OUTPUT_DIR = "./wizardcoder_15b_finetuned"
 BATCH_SIZE = 1
@@ -83,10 +83,10 @@ def main():
     if torch.cuda.is_available():
         print(f"🎯 GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
     
-    # Load model and tokenizer with safetensors
-    print("🔽 Loading WizardCoder-15B model...")
+    # Load model and tokenizer from local path
+    print("🔽 Loading WizardCoder-15B model from local path...")
     model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
+        MODEL_PATH,
         device_map="auto",
         torch_dtype=torch.float16,
         trust_remote_code=True,
@@ -94,7 +94,7 @@ def main():
         use_safetensors=True
     )
     
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_safetensors=True)
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, use_safetensors=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
@@ -146,7 +146,7 @@ def main():
         if 'lora' in name:
             param.requires_grad_(True)
     
-    # Enable gradient checkpointing for memory efficiency
+    # Enable gradient checkpointing
     model.gradient_checkpointing_enable()
     
     print("📊 Model parameters:")
@@ -156,7 +156,7 @@ def main():
     print(f"Total parameters: {total_params:,}")
     print(f"Percentage trainable: {100 * trainable_params / total_params:.2f}%")
 
-    # Training arguments optimized for 15B model
+    # Training arguments
     training_args = TrainingArguments(
         output_dir=OUTPUT_DIR,
         num_train_epochs=EPOCHS,
