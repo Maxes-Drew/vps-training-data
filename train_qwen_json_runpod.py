@@ -30,7 +30,9 @@ def preprocess_dataset():
     dataset = load_dataset("json", data_files="/workspace/vps-training-data/social_ecommerce_dataset.json", split="train")
     def tokenize_function(examples):
         texts = [f"{examples['instruction'][i]} {examples['input'][i]} {examples['output'][i]}" for i in range(len(examples['instruction']))]
-        return tokenizer(texts, padding="max_length", truncation=True, max_length=512)
+        tokenized = tokenizer(texts, padding="max_length", truncation=True, max_length=512, return_tensors="pt")
+        tokenized["labels"] = tokenized["input_ids"].clone()  # Add labels for loss computation
+        return tokenized
     tokenized_dataset = dataset.map(tokenize_function, batched=True, num_proc=4)
     tokenized_dataset = tokenized_dataset.remove_columns(["instruction", "input", "output", "metadata"])
     return tokenized_dataset
@@ -79,7 +81,7 @@ trainer = Trainer(
     train_dataset=dataset,
     tokenizer=tokenizer,
 )
-trainer.train()  # Removed resume_from_checkpoint
+trainer.train()
 model.save_pretrained("/workspace/newtek-ai-model/final")
 tokenizer.save_pretrained("/workspace/newtek-ai-model/final")
 os.system("cd /workspace/newtek-ai-model && git add . && git commit -m 'Fine-tuned model' && git push")
