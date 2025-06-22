@@ -58,7 +58,7 @@ training_args = TrainingArguments(
     save_total_limit=3,
     fp16=True,
     auto_find_batch_size=False,
-    resume_from_checkpoint=False,  # Changed to False
+    resume_from_checkpoint=False,
     deepspeed={
         "zero_optimization": {
             "stage": 3,
@@ -79,7 +79,7 @@ trainer = Trainer(
     train_dataset=dataset,
     tokenizer=tokenizer,
 )
-trainer.train(resume_from_checkpoint=checkpoint_dir if os.path.exists(checkpoint_dir) else None)
+trainer.train()  # Removed resume_from_checkpoint
 model.save_pretrained("/workspace/newtek-ai-model/final")
 tokenizer.save_pretrained("/workspace/newtek-ai-model/final")
 os.system("cd /workspace/newtek-ai-model && git add . && git commit -m 'Fine-tuned model' && git push")
