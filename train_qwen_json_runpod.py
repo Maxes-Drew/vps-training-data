@@ -57,8 +57,8 @@ training_args = TrainingArguments(
     save_steps=200,
     save_total_limit=3,
     fp16=True,
-    auto_find_batch_size=False,  # Changed to False
-    resume_from_checkpoint=True,
+    auto_find_batch_size=False,
+    resume_from_checkpoint=False,  # Changed to False
     deepspeed={
         "zero_optimization": {
             "stage": 3,
